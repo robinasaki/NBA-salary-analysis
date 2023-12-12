@@ -1,0 +1,398 @@
+---
+title: "STA302 Final Project rmd"
+author: "Hugo Feng, Chenxu Mao, Yakun Wang"
+subtitle: "STA304 - Fall 2023 -Assignment 2"
+date: "December 11, 2023"
+output:
+  pdf_document: default
+---
+
+```{r, message = FALSE, echo = FALSE}
+
+# Load the original dataset
+library(tidyverse)
+library(readr)
+NBA_player_data = read_csv("~/Desktop/STA302_FinalProject_Part3/NBA_Player(original).csv")
+
+# Data cleaning process 
+NBA_player <- NBA_player_data %>% select(Player.x, Player_ID, Pos1, FT., FG., TRB, AST, BLK, TOV, PF, PTS, Salary) %>%
+  na.omit() %>%
+  mutate(Pos1 = case_when(Pos1 == "PG" ~ 1,
+                          Pos1 == "PF" ~ 2,
+                          Pos1 == "C" ~ 3,
+                          Pos1 == "SG" ~ 4,
+                          Pos1 == "SF" ~ 5))
+
+```
+
+
+# Model Validation
+
+```{r, echo = FALSE}
+
+set.seed(302)
+attach(NBA_player)
+rows <- sample(1:782, 521, replace = FALSE)
+# Randomly split cleaned data into training set (60%) and test set (40%)
+training <- NBA_player[rows,]
+test <- NBA_player[-rows,]
+
+```
+
+
+# Result
+
+```{r, echo = FALSE}
+
+# Summaries of the numerical variables in the training set
+summary(training[, c(4, 5, 6, 7, 8, 9, 10, 11, 12)])
+
+# Summaries of the numerical variables in the test set
+summary(test[, c(4, 5, 6, 7, 8, 9, 10, 11, 12)])
+
+```
+
+
+```{r, message = FALSE, echo = FALSE}
+
+# Plots for each numerical variable in training set
+library(ggplot2)
+library(gridExtra)
+attach(training)
+par(mfrow=c(2,2))
+hist(Salary, breaks = 10, main = "Salary")
+hist(TRB, breaks = 10, main = "Total Rebounds Per Game")
+hist(AST, breaks = 10, main = "Assists Per Game")
+hist(BLK, breaks = 10, main = "Blocks Per Game")
+par(mfrow=c(2,2))
+hist(TOV, breaks = 10, main = "Turnovers Per Game")
+hist(PF, breaks = 10, main = "Personal Fouls Per Game")
+hist(PTS, breaks = 10, main = "Points Per Game")
+percentages <- data.frame(FT. = FT., FG. = FG.)
+boxplot(percentages, main = "Free Throw & Field Goal")
+
+
+ggplot(data=training, aes(x = PTS, y = Salary)) + 
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) + 
+  labs(x = 'Points Per Game', y = 'Salary', 
+       title = 'Salary versus Points Per Game')
+
+ggplot(data=training, aes(x = TRB, y = Salary)) + 
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) + 
+  labs(x = 'Total Rebounds Per Game', y = 'Salary', 
+       title = 'Salary versus Total Rebounds Per Game')
+
+#grid.arrange(a,b, nrow=1)
+
+```
+
+
+```{r, message = FALSE, echo = FALSE}
+
+# Fit a multiple linear regression model
+model1 <- lm(Salary ~ FT. + FG. + TRB + AST + BLK + TOV + PF + PTS + Pos1, data = training)
+summary(model1)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Model checking
+r <- resid(model1)
+
+# Condition 1
+plot(training$Salary ~ fitted(model1), main="Salary versus Fitted", xlab="Fitted", ylab="Salary")
+abline(a = 0, b = 1)
+lines(lowess(training$Salary ~ fitted(model1)), lty=2)
+
+# Condition 2
+data = data.frame(TRB = training$TRB, AST = training$AST, FT. = training$FT., FG. = training$FG., BLK = training$BLK, TOV = training$TOV, PF = training$PF, PTS = training$PTS)
+pairs(data)
+
+```
+
+```{r, message = FALSE, echo = FALSE, fig.height = 4}
+
+# Checking model assumptions
+par(mfrow=c(2,2))
+plot(model1,1)
+plot(model1,2)
+plot(model1,3)
+plot(model1,4)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+library(car)
+boxCox(model1)
+
+training$transformed_Salary <- training$Salary ^ (1/4)
+model2 <- lm(transformed_Salary ~ FT. + FG. + TRB + AST + BLK + TOV + PF + PTS + Pos1, data = training)
+summary(model2)
+
+```
+
+
+```{r, message = FALSE, echo = FALSE}
+
+# Model checking
+r <- resid(model2)
+
+# Condition 1
+plot(training$transformed_Salary ~ fitted(model2), main="Transformed Salary versus Fitted", xlab="Fitted", ylab="Transformed Salary")
+abline(a = 0, b = 1)
+lines(lowess(training$transformed_Salary ~ fitted(model2)), lty=2)
+
+# Condition 2
+data = data.frame(TRB = training$TRB, AST = training$AST, FT. = training$FT., FG. = training$FG., BLK = training$BLK, TOV = training$TOV, PF = training$PF, PTS = training$PTS)
+pairs(data)
+
+```
+
+```{r, message = FALSE, echo = FALSE, fig.height = 4}
+
+# Checking model assumptions
+par(mfrow=c(2,2))
+plot(model2,1)
+plot(model2,2)
+plot(model2,3)
+plot(model2,4)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Fit a multiple linear regression model with reduced number of predictors
+model3 <- lm(transformed_Salary ~ TRB + AST + TOV + PTS + Pos1, data = training)
+summary(model3)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Fit a multiple linear regression model with reduced number of predictors
+model4 <- lm(transformed_Salary ~ TRB + AST + PTS + Pos1, data = training)
+summary(model4)
+
+```
+
+
+```{r, message = FALSE, echo = FALSE}
+
+# Overall F test
+anova(model4)
+
+```
+
+select model4
+
+```{r, message = FALSE, echo = FALSE}
+
+# Find outlier
+rstd <- rstandard(model4)
+which(rstd > 4 | rstd < -4)
+
+```
+
+
+
+```{r, message = FALSE, echo = FALSE}
+
+n <- nrow(training)
+p <- length(coef(model4)) - 1
+# leverage cutoff
+h_cut <- 2*(p+1)/n
+which(hatvalues(model4) > h_cut)
+
+```
+
+
+
+```{r, message = FALSE, echo = FALSE}
+
+# Influential on all fitted values
+D_cut <- qf(0.5, p+1, n-p-1)
+which(cooks.distance(model4) > D_cut)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Influential on own fitted values
+fits_cut <- 2*sqrt((p+1)/n) 
+which(abs(dffits(model4)) > fits_cut)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Influential on at least one estimated coefficient
+beta_cut <- 2/sqrt(n) 
+for (i in 1:5) {
+  print(paste0("Beta ", i-1))
+  print(which(abs(dfbetas(model4)[,i]) > beta_cut)) 
+}
+```
+
+```{r, message = FALSE, echo = FALSE}
+library(MASS)
+library(car) 
+vif(model4)
+```
+
+# Appendix 1: Result
+
+```{r, message = FALSE, echo = FALSE}
+
+# Fit a multiple linear regression model
+m1 <- lm(Salary ~ FT. + FG. + TRB + AST + BLK + TOV + PF + PTS + Pos1, data = test)
+summary(m1)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Model checking
+r_test <- resid(m1)
+
+# Condition 1
+plot(test$Salary ~ fitted(m1), main="Salary versus Fitted", xlab="Fitted", ylab="Salary")
+abline(a = 0, b = 1)
+lines(lowess(test$Salary ~ fitted(m1)), lty=2)
+
+# Condition 2
+data = data.frame(TRB = test$TRB, AST = test$AST, FT. = test$FT., FG. = test$FG., BLK = test$BLK, TOV = test$TOV, PF = test$PF, PTS = test$PTS)
+pairs(data)
+
+```
+
+```{r, message = FALSE, echo = FALSE, fig.height = 4}
+
+# Checking model assumptions
+par(mfrow=c(2,2))
+plot(m1,1)
+plot(m1,2)
+plot(m1,3)
+plot(m1,4)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+library(car)
+boxCox(m1)
+
+test$transformed_Salary <- test$Salary ^ (1/4)
+m2 <- lm(transformed_Salary ~ FT. + FG. + TRB + AST + BLK + TOV + PF + PTS + Pos1, data = test)
+summary(m2)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Model checking
+r_test <- resid(m2)
+
+# Condition 1
+plot(test$transformed_Salary ~ fitted(m2), main="Transformed Salary versus Fitted", xlab="Fitted", ylab="Transformed Salary")
+abline(a = 0, b = 1)
+lines(lowess(test$transformed_Salary ~ fitted(m2)), lty=2)
+
+# Condition 2
+data = data.frame(TRB = test$TRB, AST = test$AST, FT. = test$FT., FG. = test$FG., BLK = test$BLK, TOV = test$TOV, PF = test$PF, PTS = test$PTS)
+pairs(data)
+
+```
+
+```{r, message = FALSE, echo = FALSE, fig.height = 4}
+
+# Checking model assumptions
+par(mfrow=c(2,2))
+plot(m2,1)
+plot(m2,2)
+plot(m2,3)
+plot(m2,4)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Fit a multiple linear regression model with reduced number of predictors
+m3 <- lm(transformed_Salary ~ TRB + AST + PTS, data = test)
+summary(m3)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Overall F test
+anova(m3)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Find outlier
+rstd_test <- rstandard(m3)
+which(rstd > 4 | rstd < -4)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+n_test <- nrow(test)
+p_test <- length(coef(m3)) - 1
+# leverage cutoff
+h_cut <- 2*(p+1)/n
+which(hatvalues(m3) > h_cut)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Influential on all fitted values
+D_cut <- qf(0.5, p+1, n-p-1)
+which(cooks.distance(m3) > D_cut)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Influential on own fitted values
+fits_cut <- 2*sqrt((p+1)/n) 
+which(abs(dffits(model4)) > fits_cut)
+
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+# Influential on at least one estimated coefficient
+beta_cut <- 2/sqrt(n) 
+for (i in 1:4) {
+  print(paste0("Beta ", i-1))
+  print(which(abs(dfbetas(m3)[,i]) > beta_cut)) 
+}
+```
+
+```{r, message = FALSE, echo = FALSE}
+library(MASS)
+library(car) 
+vif(m3)
+```
+
+```{r, message = FALSE, echo = FALSE}
+
+summary(model4)
+summary(m3)
+
+```
+
+
+
+
+
+
+
